@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Payment Requests · Procurement Demo</title>
+    <base href="/Procurement/" />
+    <link rel="stylesheet" href="assets/styles.css" />
+    <script src="assets/utils.js" defer></script>
+    <script src="assets/ui.js" defer></script>
+    <script src="assets/app.js" defer></script>
+  </head>
+  <body>
+    <header>
+      <nav class="navbar" aria-label="Primary navigation">
+        <a class="navbar-brand" href="index.html">Procurement</a>
+        <div class="navbar-links">
+          <a href="index.html">Overview</a>
+          <a href="requests.html">Requests</a>
+          <a href="orders.html">Orders</a>
+          <a href="payments.html" aria-current="page">Payments</a>
+          <a href="about.html">About</a>
+        </div>
+      </nav>
+    </header>
+    <main>
+      <section class="section">
+        <div class="section-header">
+          <h1>Payment Requests</h1>
+          <p>Track disbursements, coordinate approvals, and close the loop against committed spend.</p>
+        </div>
+        <button class="btn btn-secondary" id="reset-data">Reset demo data</button>
+      </section>
+
+      <section class="section">
+        <h2>Category Budgets</h2>
+        <div id="category-summary"></div>
+      </section>
+
+      <section class="section">
+        <h2>Payment List</h2>
+        <div id="payments-table"></div>
+      </section>
+
+      <section class="section">
+        <h2>New Payment</h2>
+        <form id="payment-form">
+          <div class="form-row">
+            <label for="po-id">
+              Purchase order
+              <select class="input" id="po-id" name="poId" required></select>
+            </label>
+            <label for="amount">
+              Amount
+              <input class="input" id="amount" name="amount" type="number" min="0" step="0.01" required />
+            </label>
+          </div>
+          <label for="payment-notes">
+            Notes
+            <textarea id="payment-notes" name="notes" placeholder="Invoice reference, payment terms"></textarea>
+          </label>
+
+          <div class="card" id="po-preview">
+            <p>Select a purchase order to view line items and remaining balance.</p>
+          </div>
+
+          <button class="btn btn-primary" type="submit">Create payment</button>
+        </form>
+      </section>
+    </main>
+    <footer>
+      <p>Procurement workflow demo — built for GitHub Pages deployment.</p>
+    </footer>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        const { renderCategorySummary, renderTable, showToast, showModal, populateSelect } = window.UIHelpers;
+        const { formatCurrency } = window.ProcurementUtils;
+        const app = window.ProcurementApp;
+
+        const categoryContainer = document.getElementById("category-summary");
+        const tableContainer = document.getElementById("payments-table");
+        const form = document.getElementById("payment-form");
+        const poSelect = document.getElementById("po-id");
+        const amountInput = document.getElementById("amount");
+        const preview = document.getElementById("po-preview");
+
+        function renderBudgets() {
+          const categories = app.listCategories();
+          renderCategorySummary(categoryContainer, categories);
+        }
+
+        function calculatePaidTotals(orderId) {
+          return app
+            .listPayments()
+            .filter((payment) => payment.poId === orderId && payment.status === "Paid")
+            .reduce((total, payment) => total + payment.amount, 0);
+        }
+
+        function renderOrderOptions() {
+          const orders = app.listOrders();
+          const openOrders = orders.filter((order) => order.status === "Open" || order.status === "Closed");
+          populateSelect(
+            poSelect,
+            openOrders.map((order) => ({
+              label: `${order.id} · ${order.vendor} · ${formatCurrency(order.totalAmount)}`,
+              value: order.id,
+            })),
+            openOrders.length ? "Choose a purchase order" : "No purchase orders available"
+          );
+          poSelect.disabled = !openOrders.length;
+          updatePreview();
+        }
+
+        function renderPayments() {
+          const payments = app.listPayments();
+          renderTable(tableContainer, [
+            { key: "id", label: "Payment" },
+            { key: "poId", label: "Order" },
+            {
+              key: "amount",
+              label: "Amount",
+              render: (value) => formatCurrency(value || 0),
+            },
+            { key: "status", label: "Status" },
+            {
+              type: "actions",
+              label: "Actions",
+              actions: (row) => {
+                const actions = [
+                  {
+                    label: "View",
+                    variant: "secondary",
+                    onAction: () => showPaymentDetails(row),
+                  },
+                ];
+                if (row.status === "Submitted") {
+                  actions.push({
+                    label: "Approve",
+                    variant: "success",
+                    onAction: () => handleAction(() => app.approvePayment(row.id), "Payment approved"),
+                  });
+                }
+                if (row.status === "Submitted" || row.status === "Approved") {
+                  actions.push({
+                    label: "Mark paid",
+                    variant: "primary",
+                    onAction: () => handleAction(() => app.markPaymentPaid(row.id), "Payment marked paid"),
+                  });
+                }
+                return actions;
+              },
+            },
+          ], payments);
+        }
+
+        function showPaymentDetails(payment) {
+          const order = payment.order;
+          const lines = order
+            ? order.lines
+                .map(
+                  (line) =>
+                    `<tr><td>${line.productName}</td><td>${line.qty}</td><td>${formatCurrency(line.price)}</td><td>${formatCurrency(
+                      line.qty * line.price
+                    )}</td></tr>`
+                )
+                .join("")
+            : "<tr><td colspan=4>No order details</td></tr>";
+          const body = `
+            <p><strong>Order:</strong> ${payment.poId}</p>
+            <p><strong>Status:</strong> ${payment.status}</p>
+            <p><strong>Amount:</strong> ${formatCurrency(payment.amount)}</p>
+            <table class="data-table">
+              <thead><tr><th>Product</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead>
+              <tbody>${lines}</tbody>
+            </table>
+          `;
+          showModal({ title: `Payment ${payment.id}`, content: body });
+        }
+
+        function handleAction(action, message) {
+          try {
+            action();
+            showToast(message, "success");
+            rerender();
+          } catch (error) {
+            console.error(error);
+            showToast(error.message, "danger");
+          }
+        }
+
+        function updatePreview() {
+          const orderId = poSelect.value;
+          if (!orderId) {
+            preview.innerHTML = "<p>Select a purchase order to view line items and remaining balance.</p>";
+            amountInput.value = "";
+            return;
+          }
+          const order = app.listOrders().find((item) => item.id === orderId);
+          if (!order) {
+            preview.innerHTML = "<p>No matching order.</p>";
+            amountInput.value = "";
+            return;
+          }
+          const paid = calculatePaidTotals(orderId);
+          const remaining = Math.max(order.totalAmount - paid, 0);
+          amountInput.value = remaining.toFixed(2);
+          const rows = order.lines
+            .map(
+              (line) =>
+                `<tr><td>${line.productName}</td><td>${line.qty}</td><td>${formatCurrency(line.price)}</td><td>${formatCurrency(
+                  line.qty * line.price
+                )}</td></tr>`
+            )
+            .join("");
+          preview.innerHTML = `
+            <h3>${order.id} — ${order.vendor}</h3>
+            <p>Status: ${order.status}</p>
+            <p>Balance remaining: <strong>${formatCurrency(remaining)}</strong></p>
+            <table class="data-table">
+              <thead><tr><th>Product</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          `;
+        }
+
+        poSelect.addEventListener("change", updatePreview);
+
+        form.addEventListener("submit", (event) => {
+          event.preventDefault();
+          if (!poSelect.value) {
+            showToast("Select a purchase order first", "danger");
+            return;
+          }
+          const payload = {
+            poId: poSelect.value,
+            amount: amountInput.value,
+            notes: form.notes.value.trim(),
+          };
+          try {
+            app.createPaymentRequest(payload);
+            showToast("Payment created", "success");
+            form.reset();
+            renderOrderOptions();
+            rerender();
+          } catch (error) {
+            console.error(error);
+            showToast(error.message, "danger");
+          }
+        });
+
+        document.getElementById("reset-data").addEventListener("click", () => {
+          app.resetDemoData();
+          form.reset();
+          renderOrderOptions();
+          rerender();
+          showToast("Demo data reset", "success");
+        });
+
+        function rerender() {
+          renderBudgets();
+          renderPayments();
+        }
+
+        renderOrderOptions();
+        rerender();
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Purchase Requests · Procurement Demo</title>
+    <base href="/Procurement/" />
+    <link rel="stylesheet" href="assets/styles.css" />
+    <script src="assets/utils.js" defer></script>
+    <script src="assets/ui.js" defer></script>
+    <script src="assets/app.js" defer></script>
+  </head>
+  <body>
+    <header>
+      <nav class="navbar" aria-label="Primary navigation">
+        <a class="navbar-brand" href="index.html">Procurement</a>
+        <div class="navbar-links">
+          <a href="index.html">Overview</a>
+          <a href="requests.html" aria-current="page">Requests</a>
+          <a href="orders.html">Orders</a>
+          <a href="payments.html">Payments</a>
+          <a href="about.html">About</a>
+        </div>
+      </nav>
+    </header>
+    <main>
+      <section class="section">
+        <div class="section-header">
+          <h1>Purchase Requests</h1>
+          <p>Capture sourcing needs, collaborate on approvals, and watch category budgets update.</p>
+        </div>
+        <button class="btn btn-secondary" id="reset-data">Reset demo data</button>
+      </section>
+
+      <section class="section">
+        <h2>Category Budgets</h2>
+        <div id="category-summary"></div>
+      </section>
+
+      <section class="section">
+        <h2>Request List</h2>
+        <div id="requests-table"></div>
+      </section>
+
+      <section class="section">
+        <h2>New Request</h2>
+        <form id="request-form">
+          <div class="form-row">
+            <label for="requester">
+              Requester name
+              <input class="input" id="requester" name="requester" type="text" required />
+            </label>
+            <label for="notes">
+              Business justification
+              <textarea id="notes" name="notes" placeholder="Context for approvers"></textarea>
+            </label>
+          </div>
+
+          <div class="line-items" id="line-items"></div>
+          <button class="btn btn-accent" type="button" id="add-line">Add line item</button>
+
+          <div class="form-row">
+            <div>
+              <p id="total-display"><strong>Total:</strong> $0.00</p>
+            </div>
+          </div>
+
+          <button class="btn btn-primary" type="submit">Create request</button>
+        </form>
+      </section>
+    </main>
+    <footer>
+      <p>Procurement workflow demo — built for GitHub Pages deployment.</p>
+    </footer>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        const { renderCategorySummary, renderTable, showToast, showModal, buildLineItemRow } = window.UIHelpers;
+        const { formatCurrency } = window.ProcurementUtils;
+        const app = window.ProcurementApp;
+
+        const categoryContainer = document.getElementById("category-summary");
+        const tableContainer = document.getElementById("requests-table");
+        const form = document.getElementById("request-form");
+        const lineItemsContainer = document.getElementById("line-items");
+        const addLineButton = document.getElementById("add-line");
+        const totalDisplay = document.getElementById("total-display");
+
+        let products = [];
+
+        function refreshProducts() {
+          products = app.listProducts();
+        }
+
+        function renderBudgets() {
+          const categories = app.listCategories();
+          renderCategorySummary(categoryContainer, categories);
+        }
+
+        function renderRequests() {
+          const requests = app.listRequests();
+          renderTable(tableContainer, [
+            { key: "id", label: "Request" },
+            { key: "requester", label: "Requester" },
+            {
+              key: "status",
+              label: "Status",
+              render: (value) => value,
+            },
+            {
+              key: "total",
+              label: "Total",
+              render: (value) => formatCurrency(value || 0),
+            },
+            {
+              type: "actions",
+              label: "Actions",
+              actions: (row) => {
+                const actions = [
+                  {
+                    label: "View",
+                    variant: "secondary",
+                    onAction: () => showRequestDetails(row),
+                  },
+                ];
+                if (row.status === "Draft") {
+                  actions.push({
+                    label: "Submit",
+                    variant: "primary",
+                    onAction: () => handleAction(() => app.submitPurchaseRequest(row.id), "Request submitted"),
+                  });
+                }
+                if (row.status === "Submitted") {
+                  actions.push({
+                    label: "Approve",
+                    variant: "success",
+                    onAction: () => handleAction(() => app.approvePurchaseRequest(row.id), "Request approved"),
+                  });
+                  actions.push({
+                    label: "Reject",
+                    variant: "danger",
+                    onAction: () => handleAction(() => app.rejectPurchaseRequest(row.id), "Request rejected"),
+                  });
+                  actions.push({
+                    label: "Cancel",
+                    onAction: () => handleAction(() => app.cancelPurchaseRequest(row.id), "Request cancelled"),
+                  });
+                }
+                if (row.status === "Approved") {
+                  actions.push({
+                    label: "Cancel",
+                    onAction: () => handleAction(() => app.cancelPurchaseRequest(row.id), "Request cancelled"),
+                  });
+                }
+                if (["Draft", "Rejected", "Cancelled"].includes(row.status)) {
+                  actions.push({
+                    label: "Delete",
+                    variant: "danger",
+                    onAction: () =>
+                      window.UIHelpers.showConfirm("Delete this request?", () => {
+                        app.deletePurchaseRequest(row.id);
+                        showToast("Request deleted", "success");
+                        rerender();
+                      }),
+                  });
+                }
+                return actions;
+              },
+            },
+          ], requests);
+        }
+
+        function showRequestDetails(request) {
+          const lines = request.lines
+            .map(
+              (line) =>
+                `<tr><td>${line.productName}</td><td>${line.qty}</td><td>${formatCurrency(line.price)}</td><td>${formatCurrency(line.total)}</td></tr>`
+            )
+            .join("");
+          const body = `
+            <p><strong>Requester:</strong> ${request.requester}</p>
+            <p><strong>Status:</strong> ${request.status}</p>
+            <p><strong>Total:</strong> ${formatCurrency(request.total)}</p>
+            <table class="data-table">
+              <thead><tr><th>Product</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead>
+              <tbody>${lines}</tbody>
+            </table>
+          `;
+          showModal({ title: `Request ${request.id}`, content: body });
+        }
+
+        function handleAction(action, message) {
+          try {
+            action();
+            showToast(message, "success");
+            rerender();
+          } catch (error) {
+            console.error(error);
+            showToast(error.message, "danger");
+          }
+        }
+
+        function addLineItem() {
+          const row = buildLineItemRow(products, (element) => {
+            lineItemsContainer.removeChild(element);
+            updateTotal();
+          });
+          lineItemsContainer.appendChild(row);
+          updateTotal();
+        }
+
+        function collectLines() {
+          return Array.from(lineItemsContainer.querySelectorAll(".line-item")).map((row) => ({
+            productId: row.querySelector('select[name="productId"]').value,
+            qty: Number(row.querySelector('input[name="qty"]').value || 0),
+            price: Number(row.querySelector('input[name="price"]').value || 0),
+          }));
+        }
+
+        function updateTotal() {
+          const total = collectLines().reduce((acc, line) => acc + line.qty * line.price, 0);
+          totalDisplay.innerHTML = `<strong>Total:</strong> ${formatCurrency(total)}`;
+        }
+
+        addLineButton.addEventListener("click", addLineItem);
+        lineItemsContainer.addEventListener("input", updateTotal);
+
+        form.addEventListener("submit", (event) => {
+          event.preventDefault();
+          const data = {
+            requester: form.requester.value.trim(),
+            notes: form.notes.value.trim(),
+            lines: collectLines(),
+          };
+          try {
+            app.createPurchaseRequest(data);
+            showToast("Request created", "success");
+            form.reset();
+            lineItemsContainer.innerHTML = "";
+            addLineItem();
+            rerender();
+          } catch (error) {
+            console.error(error);
+            showToast(error.message, "danger");
+          }
+        });
+
+        document.getElementById("reset-data").addEventListener("click", () => {
+          app.resetDemoData();
+          refreshProducts();
+          lineItemsContainer.innerHTML = "";
+          addLineItem();
+          rerender();
+          showToast("Demo data reset", "success");
+        });
+
+        function rerender() {
+          renderBudgets();
+          renderRequests();
+        }
+
+        refreshProducts();
+        addLineItem();
+        rerender();
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Procurement Demo</title>
+    <base href="/Procurement/" />
+    <link rel="stylesheet" href="assets/styles.css" />
+    <script src="assets/utils.js" defer></script>
+    <script src="assets/ui.js" defer></script>
+    <script src="assets/app.js" defer></script>
+  </head>
+  <body>
+    <header>
+      <nav class="navbar" aria-label="Primary navigation">
+        <a class="navbar-brand" href="index.html">Procurement</a>
+        <div class="navbar-links">
+          <a href="index.html" aria-current="page">Overview</a>
+          <a href="requests.html">Requests</a>
+          <a href="orders.html">Orders</a>
+          <a href="payments.html">Payments</a>
+          <a href="about.html">About</a>
+        </div>
+      </nav>
+    </header>
+    <main>
+      <section class="hero">
+        <div>
+          <h1>Plan, Approve, and Track Procurement with Confidence</h1>
+          <p>
+            Explore a front-end prototype that demonstrates purchase requests, purchase orders,
+            payment workflows, and category-driven budget control. All data is stored locally so you
+            can experiment freely.
+          </p>
+          <div class="cta-buttons">
+            <a class="btn btn-primary" href="requests.html">Manage Requests</a>
+            <a class="btn btn-secondary" href="orders.html">Review Orders</a>
+            <a class="btn btn-accent" href="payments.html">Track Payments</a>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Why this demo?</h3>
+          <ul>
+            <li>Showcase procurement workflow states and approvals</li>
+            <li>Visualize category budgets as commitments and spend evolve</li>
+            <li>Experiment with seeded data or start again with a fresh slate</li>
+          </ul>
+          <button class="btn btn-secondary" id="reset-data">Reset demo data</button>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Feature highlights</h2>
+        <div class="card-grid">
+          <article class="card">
+            <h3>Master Data</h3>
+            <p>Categories, products, and pricing seeded for realistic procurement scenarios.</p>
+          </article>
+          <article class="card">
+            <h3>Workflow Controls</h3>
+            <p>Submit, approve, reject, cancel, close, and mark paid directly from each list.</p>
+          </article>
+          <article class="card">
+            <h3>Budget Guardrails</h3>
+            <p>Budgets recompute as requests, orders, and payments evolve.</p>
+          </article>
+          <article class="card">
+            <h3>Local Sandbox</h3>
+            <p>All interactions stay in your browser via <code>localStorage</code>.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Category Budgets</h2>
+        <div id="category-summary"></div>
+      </section>
+
+      <section class="section">
+        <h2>Project Layout</h2>
+        <div class="card">
+          <pre>
+index.html        — Overview & navigation hub
+requests.html     — Purchase request list & intake form
+orders.html       — Purchase order list & creation form
+payments.html     — Payment request list & workflow actions
+about.html        — Project background & contact links
+assets/styles.css — Modern responsive styling
+assets/app.js     — LocalStorage data store & procurement logic
+assets/ui.js      — UI helpers for tables, forms, modals
+assets/utils.js   — Formatting helpers & ID utilities
+          </pre>
+        </div>
+      </section>
+    </main>
+    <footer>
+      <p>Procurement workflow demo — built for GitHub Pages deployment.</p>
+    </footer>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        const { renderCategorySummary, showToast } = window.UIHelpers;
+        const load = () => {
+          const categories = window.ProcurementApp.listCategories();
+          renderCategorySummary(document.getElementById("category-summary"), categories);
+        };
+        load();
+        document.getElementById("reset-data").addEventListener("click", () => {
+          window.ProcurementApp.resetDemoData();
+          load();
+          showToast("Demo data reset", "success");
+        });
+      });
+    </script>
+  </body>
+</html>
