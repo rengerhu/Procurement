@@ -45,24 +45,54 @@
       <section class="section">
         <h2>New Request</h2>
         <form id="request-form">
-          <div class="form-row">
-            <label for="requester">
-              Requester name
-              <input class="input" id="requester" name="requester" type="text" required />
-            </label>
+          <div class="form-section">
+            <h3>Submitter information</h3>
+            <div class="form-grid">
+              <label for="requester">
+                Requester name
+                <input class="input" id="requester" name="requester" type="text" autocomplete="name" required />
+              </label>
+              <label for="requester-email">
+                Requester email
+                <input
+                  class="input"
+                  id="requester-email"
+                  name="requesterEmail"
+                  type="email"
+                  autocomplete="email"
+                  required
+                />
+              </label>
+              <label for="department">
+                Department
+                <input class="input" id="department" name="department" type="text" required />
+              </label>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <h3>Basic information</h3>
+            <div class="form-grid">
+              <label for="request-title">
+                Request title
+                <input class="input" id="request-title" name="title" type="text" required />
+              </label>
+              <label for="needed-by">
+                Needed by
+                <input class="input" id="needed-by" name="neededBy" type="date" required />
+              </label>
+            </div>
             <label for="notes">
               Business justification
               <textarea id="notes" name="notes" placeholder="Context for approvers"></textarea>
             </label>
           </div>
 
-          <div class="line-items" id="line-items"></div>
-          <button class="btn btn-accent" type="button" id="add-line">Add line item</button>
-
-          <div class="form-row">
-            <div>
-              <p id="total-display"><strong>Total:</strong> $0.00</p>
-            </div>
+          <div class="form-section">
+            <h3>Details</h3>
+            <div class="line-items" id="line-items"></div>
+            <button class="btn btn-accent" type="button" id="add-line">Add line item</button>
+            <p id="total-display"><strong>Total:</strong> $0.00</p>
           </div>
 
           <button class="btn btn-primary" type="submit">Create request</button>
@@ -76,7 +106,7 @@
     <script>
       document.addEventListener("DOMContentLoaded", () => {
         const { renderCategorySummary, renderTable, showToast, showModal, buildLineItemRow } = window.UIHelpers;
-        const { formatCurrency } = window.ProcurementUtils;
+        const { formatCurrency, formatDate } = window.ProcurementUtils;
         const app = window.ProcurementApp;
 
         const categoryContainer = document.getElementById("category-summary");
@@ -101,7 +131,13 @@
           const requests = app.listRequests();
           renderTable(tableContainer, [
             { key: "id", label: "Request" },
+            { key: "title", label: "Title" },
             { key: "requester", label: "Requester" },
+            {
+              key: "neededBy",
+              label: "Needed by",
+              render: (value) => formatDate(value),
+            },
             {
               key: "status",
               label: "Status",
@@ -178,9 +214,13 @@
             )
             .join("");
           const body = `
-            <p><strong>Requester:</strong> ${request.requester}</p>
+            <p><strong>Requester:</strong> ${request.requester} (${request.requesterEmail || "-"})</p>
+            <p><strong>Department:</strong> ${request.department || "-"}</p>
+            <p><strong>Title:</strong> ${request.title || "-"}</p>
+            <p><strong>Needed by:</strong> ${formatDate(request.neededBy)}</p>
             <p><strong>Status:</strong> ${request.status}</p>
             <p><strong>Total:</strong> ${formatCurrency(request.total)}</p>
+            <p><strong>Justification:</strong> ${request.notes || "-"}</p>
             <table class="data-table">
               <thead><tr><th>Product</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead>
               <tbody>${lines}</tbody>
@@ -229,6 +269,10 @@
           event.preventDefault();
           const data = {
             requester: form.requester.value.trim(),
+            requesterEmail: form.requesterEmail.value.trim(),
+            department: form.department.value.trim(),
+            title: form.title.value.trim(),
+            neededBy: form.neededBy.value,
             notes: form.notes.value.trim(),
             lines: collectLines(),
           };

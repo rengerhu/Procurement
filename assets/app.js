@@ -67,6 +67,10 @@
       {
         id: "PR-0001",
         requester: "Alice Johnson",
+        requesterEmail: "alice.johnson@example.com",
+        department: "Information Technology",
+        title: "Laptop refresh for onboarding cohort",
+        neededBy: "2024-03-20",
         requestedAt: "2024-03-01",
         status: "Approved",
         lines: [
@@ -78,6 +82,10 @@
       {
         id: "PR-0002",
         requester: "Carlos Diaz",
+        requesterEmail: "carlos.diaz@example.com",
+        department: "Workplace Experience",
+        title: "Collaboration space furniture",
+        neededBy: "2024-05-05",
         requestedAt: "2024-04-10",
         status: "Submitted",
         lines: [
@@ -89,6 +97,10 @@
       {
         id: "PR-0003",
         requester: "Priya Patel",
+        requesterEmail: "priya.patel@example.com",
+        department: "Customer Success",
+        title: "Enablement workshop facilitation",
+        neededBy: "2024-06-01",
         requestedAt: "2024-04-15",
         status: "Draft",
         lines: [
@@ -137,8 +149,57 @@
     return JSON.parse(JSON.stringify(value));
   }
 
+  function normalizeArray(value) {
+    return Array.isArray(value) ? value : [];
+  }
+
+  function migrateData(data) {
+    if (!data || typeof data !== "object") {
+      return clone(SEED_DATA);
+    }
+
+    data.categories = normalizeArray(data.categories);
+    data.products = normalizeArray(data.products);
+    data.requests = normalizeArray(data.requests);
+    data.orders = normalizeArray(data.orders);
+    data.payments = normalizeArray(data.payments);
+    data.meta = data.meta || {};
+    data.meta.counters = data.meta.counters || {};
+
+    data.requests.forEach((request, index) => {
+      request.requesterEmail = request.requesterEmail || "";
+      request.department = request.department || "";
+      request.title = request.title || `Purchase Request ${request.id || index + 1}`;
+      request.neededBy = request.neededBy || request.requestedAt || "";
+      request.notes = request.notes || "";
+    });
+
+    data.orders.forEach((order, index) => {
+      order.buyer = order.buyer || "";
+      order.buyerEmail = order.buyerEmail || "";
+      const fallbackDate = order.orderDate || (order.createdAt ? order.createdAt.slice(0, 10) : "");
+      order.orderDate = fallbackDate;
+      order.paymentTerms = order.paymentTerms || "";
+      order.notes = order.notes || "";
+      if (!order.id) {
+        order.id = `PO-${String(index + 1).padStart(4, "0")}`;
+      }
+    });
+
+    data.payments.forEach((payment, index) => {
+      payment.submitter = payment.submitter || "";
+      payment.submitterEmail = payment.submitterEmail || "";
+      payment.invoiceNumber = payment.invoiceNumber || `Invoice ${payment.id || index + 1}`;
+      const fallbackInvoiceDate = payment.invoiceDate || (payment.createdAt ? payment.createdAt.slice(0, 10) : "");
+      payment.invoiceDate = fallbackInvoiceDate;
+      payment.notes = payment.notes || "";
+    });
+
+    return data;
+  }
+
   function seedData() {
-    const seed = clone(SEED_DATA);
+    const seed = migrateData(clone(SEED_DATA));
     localStorage.setItem(STORAGE_KEY, JSON.stringify(seed));
     return seed;
   }
@@ -149,7 +210,7 @@
       return seedData();
     }
     try {
-      return JSON.parse(raw);
+      return migrateData(JSON.parse(raw));
     } catch (error) {
       console.warn("Failed to parse procurement data. Resetting seed.", error);
       return seedData();
@@ -298,8 +359,26 @@
         price: Number(line.price),
       }));
 
-    if (!payload.requester) {
+    const requester = (payload.requester || "").trim();
+    const requesterEmail = (payload.requesterEmail || "").trim();
+    const department = (payload.department || "").trim();
+    const title = (payload.title || "").trim();
+    const neededBy = payload.neededBy || "";
+
+    if (!requester) {
       throw new Error("Requester name is required.");
+    }
+    if (!requesterEmail) {
+      throw new Error("Requester email is required.");
+    }
+    if (!department) {
+      throw new Error("Department is required.");
+    }
+    if (!title) {
+      throw new Error("Request title is required.");
+    }
+    if (!neededBy) {
+      throw new Error("Needed by date is required.");
     }
     if (!lines.length) {
       throw new Error("At least one line item is required.");
@@ -308,7 +387,11 @@
     const idNumber = updateCounters(data, "request");
     const request = {
       id: `PR-${String(idNumber).padStart(4, "0")}`,
-      requester: payload.requester,
+      requester,
+      requesterEmail,
+      department,
+      title,
+      neededBy,
       requestedAt: new Date().toISOString(),
       status: "Draft",
       notes: payload.notes || "",
@@ -366,6 +449,25 @@
       throw new Error("Only approved requests can generate purchase orders.");
     }
 
+    const buyer = (payload.buyer || "").trim();
+    const buyerEmail = (payload.buyerEmail || "").trim();
+    const vendor = (payload.vendor || "").trim();
+    const orderDate = payload.orderDate || "";
+    const paymentTerms = (payload.paymentTerms || "").trim();
+
+    if (!buyer) {
+      throw new Error("Buyer name is required.");
+    }
+    if (!buyerEmail) {
+      throw new Error("Buyer email is required.");
+    }
+    if (!vendor) {
+      throw new Error("Vendor name is required.");
+    }
+    if (!orderDate) {
+      throw new Error("Order date is required.");
+    }
+
     const lines = request.lines.map((line) => ({
       productId: line.productId,
       qty: Number(line.qty),
@@ -376,7 +478,11 @@
     const order = {
       id: `PO-${String(idNumber).padStart(4, "0")}`,
       requestId: request.id,
-      vendor: payload.vendor,
+      vendor,
+      buyer,
+      buyerEmail,
+      orderDate,
+      paymentTerms,
       status: "Open",
       createdAt: new Date().toISOString(),
       lines,
@@ -418,6 +524,24 @@
       throw new Error("A valid purchase order is required.");
     }
 
+    const submitter = (payload.submitter || "").trim();
+    const submitterEmail = (payload.submitterEmail || "").trim();
+    const invoiceNumber = (payload.invoiceNumber || "").trim();
+    const invoiceDate = payload.invoiceDate || "";
+
+    if (!submitter) {
+      throw new Error("Payment requester name is required.");
+    }
+    if (!submitterEmail) {
+      throw new Error("Payment requester email is required.");
+    }
+    if (!invoiceNumber) {
+      throw new Error("Invoice number is required.");
+    }
+    if (!invoiceDate) {
+      throw new Error("Invoice date is required.");
+    }
+
     const amount = Number(payload.amount);
     if (!Number.isFinite(amount) || amount <= 0) {
       throw new Error("Payment amount must be greater than zero.");
@@ -436,6 +560,10 @@
       id: `PAY-${String(idNumber).padStart(4, "0")}`,
       poId: order.id,
       amount,
+      submitter,
+      submitterEmail,
+      invoiceNumber,
+      invoiceDate,
       status: "Submitted",
       createdAt: new Date().toISOString(),
       notes: payload.notes || "",

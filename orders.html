@@ -45,23 +45,51 @@
       <section class="section">
         <h2>New Order</h2>
         <form id="order-form">
-          <div class="form-row">
-            <label for="request-id">
-              Source request
-              <select class="input" id="request-id" name="requestId" required></select>
-            </label>
-            <label for="vendor">
-              Vendor name
-              <input class="input" id="vendor" name="vendor" type="text" required />
+          <div class="form-section">
+            <h3>Submitter information</h3>
+            <div class="form-grid">
+              <label for="buyer-name">
+                Buyer name
+                <input class="input" id="buyer-name" name="buyer" type="text" autocomplete="name" required />
+              </label>
+              <label for="buyer-email">
+                Buyer email
+                <input class="input" id="buyer-email" name="buyerEmail" type="email" autocomplete="email" required />
+              </label>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <h3>Basic information</h3>
+            <div class="form-grid">
+              <label for="request-id">
+                Source request
+                <select class="input" id="request-id" name="requestId" required></select>
+              </label>
+              <label for="vendor">
+                Vendor name
+                <input class="input" id="vendor" name="vendor" type="text" required />
+              </label>
+              <label for="order-date">
+                Order date
+                <input class="input" id="order-date" name="orderDate" type="date" required />
+              </label>
+              <label for="payment-terms">
+                Payment terms
+                <input class="input" id="payment-terms" name="paymentTerms" type="text" placeholder="Net 30" />
+              </label>
+            </div>
+            <label for="order-notes">
+              Notes
+              <textarea id="order-notes" name="notes" placeholder="Fulfilment details, delivery info"></textarea>
             </label>
           </div>
-          <label for="order-notes">
-            Notes
-            <textarea id="order-notes" name="notes" placeholder="Fulfilment details, delivery info"></textarea>
-          </label>
 
-          <div class="card" id="request-preview">
-            <p>Select an approved request to preview its line items.</p>
+          <div class="form-section">
+            <h3>Details</h3>
+            <div class="card" id="request-preview">
+              <p>Select an approved request to preview its line items.</p>
+            </div>
           </div>
 
           <button class="btn btn-primary" type="submit">Create order</button>
@@ -75,13 +103,14 @@
     <script>
       document.addEventListener("DOMContentLoaded", () => {
         const { renderCategorySummary, renderTable, showToast, showModal, populateSelect } = window.UIHelpers;
-        const { formatCurrency } = window.ProcurementUtils;
+        const { formatCurrency, formatDate } = window.ProcurementUtils;
         const app = window.ProcurementApp;
 
         const categoryContainer = document.getElementById("category-summary");
         const tableContainer = document.getElementById("orders-table");
         const form = document.getElementById("order-form");
         const requestSelect = document.getElementById("request-id");
+        const orderDateInput = document.getElementById("order-date");
         const preview = document.getElementById("request-preview");
 
         function renderBudgets() {
@@ -90,7 +119,7 @@
         }
 
         function formatRequestOption(request) {
-          return `${request.id} · ${request.requester} · ${formatCurrency(request.total)}`;
+          return `${request.id} · ${request.title} · ${formatCurrency(request.total)}`;
         }
 
         function renderRequestOptions() {
@@ -114,6 +143,12 @@
           renderTable(tableContainer, [
             { key: "id", label: "Order" },
             { key: "vendor", label: "Vendor" },
+            { key: "buyer", label: "Buyer" },
+            {
+              key: "orderDate",
+              label: "Order date",
+              render: (value) => formatDate(value),
+            },
             {
               key: "totalAmount",
               label: "Total",
@@ -160,8 +195,12 @@
           const body = `
             <p><strong>Request:</strong> ${order.requestId}</p>
             <p><strong>Vendor:</strong> ${order.vendor}</p>
+            <p><strong>Buyer:</strong> ${order.buyer} (${order.buyerEmail || "-"})</p>
+            <p><strong>Order date:</strong> ${formatDate(order.orderDate)}</p>
+            <p><strong>Payment terms:</strong> ${order.paymentTerms || "-"}</p>
             <p><strong>Status:</strong> ${order.status}</p>
             <p><strong>Total:</strong> ${formatCurrency(order.totalAmount)}</p>
+            <p><strong>Notes:</strong> ${order.notes || "-"}</p>
             <table class="data-table">
               <thead><tr><th>Product</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead>
               <tbody>${lines}</tbody>
@@ -199,9 +238,13 @@
             )
             .join("");
           preview.innerHTML = `
-            <h3>${request.id} — ${request.requester}</h3>
-            <p>Status: ${request.status}</p>
-            <p>Total: <strong>${formatCurrency(request.total)}</strong></p>
+            <h3>${request.id} — ${request.title}</h3>
+            <p><strong>Requester:</strong> ${request.requester} (${request.requesterEmail || "-"})</p>
+            <p><strong>Department:</strong> ${request.department || "-"}</p>
+            <p><strong>Needed by:</strong> ${formatDate(request.neededBy)}</p>
+            <p><strong>Status:</strong> ${request.status}</p>
+            <p><strong>Total:</strong> ${formatCurrency(request.total)}</p>
+            <p><strong>Justification:</strong> ${request.notes || "-"}</p>
             <table class="data-table">
               <thead><tr><th>Product</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead>
               <tbody>${rows}</tbody>
@@ -210,6 +253,12 @@
         }
 
         requestSelect.addEventListener("change", updatePreview);
+
+        function setDefaultOrderDate() {
+          if (orderDateInput) {
+            orderDateInput.value = new Date().toISOString().slice(0, 10);
+          }
+        }
 
         form.addEventListener("submit", (event) => {
           event.preventDefault();
@@ -220,12 +269,17 @@
           const payload = {
             requestId: requestSelect.value,
             vendor: form.vendor.value.trim(),
+            buyer: form.buyer.value.trim(),
+            buyerEmail: form.buyerEmail.value.trim(),
+            orderDate: form.orderDate.value,
+            paymentTerms: form.paymentTerms.value.trim(),
             notes: form.notes.value.trim(),
           };
           try {
             app.createPurchaseOrder(payload);
             showToast("Order created", "success");
             form.reset();
+            setDefaultOrderDate();
             renderRequestOptions();
             rerender();
           } catch (error) {
@@ -237,6 +291,7 @@
         document.getElementById("reset-data").addEventListener("click", () => {
           app.resetDemoData();
           form.reset();
+          setDefaultOrderDate();
           renderRequestOptions();
           rerender();
           showToast("Demo data reset", "success");
@@ -248,6 +303,7 @@
         }
 
         renderRequestOptions();
+        setDefaultOrderDate();
         rerender();
       });
     </script>

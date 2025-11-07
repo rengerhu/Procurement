@@ -45,23 +45,51 @@
       <section class="section">
         <h2>New Payment</h2>
         <form id="payment-form">
-          <div class="form-row">
-            <label for="po-id">
-              Purchase order
-              <select class="input" id="po-id" name="poId" required></select>
-            </label>
-            <label for="amount">
-              Amount
-              <input class="input" id="amount" name="amount" type="number" min="0" step="0.01" required />
+          <div class="form-section">
+            <h3>Submitter information</h3>
+            <div class="form-grid">
+              <label for="payment-requester">
+                Payment requester
+                <input class="input" id="payment-requester" name="submitter" type="text" autocomplete="name" required />
+              </label>
+              <label for="payment-email">
+                Requester email
+                <input class="input" id="payment-email" name="submitterEmail" type="email" autocomplete="email" required />
+              </label>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <h3>Basic information</h3>
+            <div class="form-grid">
+              <label for="po-id">
+                Purchase order
+                <select class="input" id="po-id" name="poId" required></select>
+              </label>
+              <label for="invoice-number">
+                Invoice number
+                <input class="input" id="invoice-number" name="invoiceNumber" type="text" required />
+              </label>
+              <label for="invoice-date">
+                Invoice date
+                <input class="input" id="invoice-date" name="invoiceDate" type="date" required />
+              </label>
+              <label for="amount">
+                Amount
+                <input class="input" id="amount" name="amount" type="number" min="0" step="0.01" required />
+              </label>
+            </div>
+            <label for="payment-notes">
+              Notes
+              <textarea id="payment-notes" name="notes" placeholder="Invoice reference, payment terms"></textarea>
             </label>
           </div>
-          <label for="payment-notes">
-            Notes
-            <textarea id="payment-notes" name="notes" placeholder="Invoice reference, payment terms"></textarea>
-          </label>
 
-          <div class="card" id="po-preview">
-            <p>Select a purchase order to view line items and remaining balance.</p>
+          <div class="form-section">
+            <h3>Details</h3>
+            <div class="card" id="po-preview">
+              <p>Select a purchase order to view line items and remaining balance.</p>
+            </div>
           </div>
 
           <button class="btn btn-primary" type="submit">Create payment</button>
@@ -75,7 +103,7 @@
     <script>
       document.addEventListener("DOMContentLoaded", () => {
         const { renderCategorySummary, renderTable, showToast, showModal, populateSelect } = window.UIHelpers;
-        const { formatCurrency } = window.ProcurementUtils;
+        const { formatCurrency, formatDate } = window.ProcurementUtils;
         const app = window.ProcurementApp;
 
         const categoryContainer = document.getElementById("category-summary");
@@ -83,6 +111,7 @@
         const form = document.getElementById("payment-form");
         const poSelect = document.getElementById("po-id");
         const amountInput = document.getElementById("amount");
+        const invoiceDateInput = document.getElementById("invoice-date");
         const preview = document.getElementById("po-preview");
 
         function renderBudgets() {
@@ -103,7 +132,7 @@
           populateSelect(
             poSelect,
             openOrders.map((order) => ({
-              label: `${order.id} · ${order.vendor} · ${formatCurrency(order.totalAmount)}`,
+              label: `${order.id} · ${order.vendor} · ${formatCurrency(order.totalAmount)} · ${formatDate(order.orderDate)}`,
               value: order.id,
             })),
             openOrders.length ? "Choose a purchase order" : "No purchase orders available"
@@ -116,7 +145,14 @@
           const payments = app.listPayments();
           renderTable(tableContainer, [
             { key: "id", label: "Payment" },
+            { key: "invoiceNumber", label: "Invoice" },
+            {
+              key: "invoiceDate",
+              label: "Invoice date",
+              render: (value) => formatDate(value),
+            },
             { key: "poId", label: "Order" },
+            { key: "submitter", label: "Requester" },
             {
               key: "amount",
               label: "Amount",
@@ -168,8 +204,12 @@
             : "<tr><td colspan=4>No order details</td></tr>";
           const body = `
             <p><strong>Order:</strong> ${payment.poId}</p>
+            <p><strong>Invoice:</strong> ${payment.invoiceNumber}</p>
+            <p><strong>Invoice date:</strong> ${formatDate(payment.invoiceDate)}</p>
+            <p><strong>Requester:</strong> ${payment.submitter} (${payment.submitterEmail || "-"})</p>
             <p><strong>Status:</strong> ${payment.status}</p>
             <p><strong>Amount:</strong> ${formatCurrency(payment.amount)}</p>
+            <p><strong>Notes:</strong> ${payment.notes || "-"}</p>
             <table class="data-table">
               <thead><tr><th>Product</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead>
               <tbody>${lines}</tbody>
@@ -215,8 +255,12 @@
             .join("");
           preview.innerHTML = `
             <h3>${order.id} — ${order.vendor}</h3>
-            <p>Status: ${order.status}</p>
-            <p>Balance remaining: <strong>${formatCurrency(remaining)}</strong></p>
+            <p><strong>Buyer:</strong> ${order.buyer} (${order.buyerEmail || "-"})</p>
+            <p><strong>Order date:</strong> ${formatDate(order.orderDate)}</p>
+            <p><strong>Status:</strong> ${order.status}</p>
+            <p><strong>Total:</strong> ${formatCurrency(order.totalAmount)}</p>
+            <p><strong>Paid to date:</strong> ${formatCurrency(paid)}</p>
+            <p><strong>Balance remaining:</strong> ${formatCurrency(remaining)}</p>
             <table class="data-table">
               <thead><tr><th>Product</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead>
               <tbody>${rows}</tbody>
@@ -226,6 +270,12 @@
 
         poSelect.addEventListener("change", updatePreview);
 
+        function setDefaultInvoiceDate() {
+          if (invoiceDateInput) {
+            invoiceDateInput.value = new Date().toISOString().slice(0, 10);
+          }
+        }
+
         form.addEventListener("submit", (event) => {
           event.preventDefault();
           if (!poSelect.value) {
@@ -234,6 +284,10 @@
           }
           const payload = {
             poId: poSelect.value,
+            submitter: form.submitter.value.trim(),
+            submitterEmail: form.submitterEmail.value.trim(),
+            invoiceNumber: form.invoiceNumber.value.trim(),
+            invoiceDate: form.invoiceDate.value,
             amount: amountInput.value,
             notes: form.notes.value.trim(),
           };
@@ -241,6 +295,7 @@
             app.createPaymentRequest(payload);
             showToast("Payment created", "success");
             form.reset();
+            setDefaultInvoiceDate();
             renderOrderOptions();
             rerender();
           } catch (error) {
@@ -252,6 +307,7 @@
         document.getElementById("reset-data").addEventListener("click", () => {
           app.resetDemoData();
           form.reset();
+          setDefaultInvoiceDate();
           renderOrderOptions();
           rerender();
           showToast("Demo data reset", "success");
@@ -263,6 +319,7 @@
         }
 
         renderOrderOptions();
+        setDefaultInvoiceDate();
         rerender();
       });
     </script>

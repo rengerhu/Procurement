@@ -233,6 +233,25 @@ form {
   padding: 1.5rem;
 }
 
+.form-section {
+  border: 1px solid rgba(31, 41, 55, 0.1);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  margin-bottom: 1.25rem;
+  background: rgba(255, 255, 255, 0.65);
+}
+
+.form-section h3 {
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+}
+
+.form-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
 .form-row {
   display: grid;
   gap: 1rem;
