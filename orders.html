@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Purchase Orders · Procurement Demo</title>
+    <base href="/Procurement/" />
+    <link rel="stylesheet" href="assets/styles.css" />
+    <script src="assets/utils.js" defer></script>
+    <script src="assets/ui.js" defer></script>
+    <script src="assets/app.js" defer></script>
+  </head>
+  <body>
+    <header>
+      <nav class="navbar" aria-label="Primary navigation">
+        <a class="navbar-brand" href="index.html">Procurement</a>
+        <div class="navbar-links">
+          <a href="index.html">Overview</a>
+          <a href="requests.html">Requests</a>
+          <a href="orders.html" aria-current="page">Orders</a>
+          <a href="payments.html">Payments</a>
+          <a href="about.html">About</a>
+        </div>
+      </nav>
+    </header>
+    <main>
+      <section class="section">
+        <div class="section-header">
+          <h1>Purchase Orders</h1>
+          <p>Convert approved requests into commitments and keep vendor fulfillment on track.</p>
+        </div>
+        <button class="btn btn-secondary" id="reset-data">Reset demo data</button>
+      </section>
+
+      <section class="section">
+        <h2>Category Budgets</h2>
+        <div id="category-summary"></div>
+      </section>
+
+      <section class="section">
+        <h2>Order List</h2>
+        <div id="orders-table"></div>
+      </section>
+
+      <section class="section">
+        <h2>New Order</h2>
+        <form id="order-form">
+          <div class="form-row">
+            <label for="request-id">
+              Source request
+              <select class="input" id="request-id" name="requestId" required></select>
+            </label>
+            <label for="vendor">
+              Vendor name
+              <input class="input" id="vendor" name="vendor" type="text" required />
+            </label>
+          </div>
+          <label for="order-notes">
+            Notes
+            <textarea id="order-notes" name="notes" placeholder="Fulfilment details, delivery info"></textarea>
+          </label>
+
+          <div class="card" id="request-preview">
+            <p>Select an approved request to preview its line items.</p>
+          </div>
+
+          <button class="btn btn-primary" type="submit">Create order</button>
+        </form>
+      </section>
+    </main>
+    <footer>
+      <p>Procurement workflow demo — built for GitHub Pages deployment.</p>
+    </footer>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        const { renderCategorySummary, renderTable, showToast, showModal, populateSelect } = window.UIHelpers;
+        const { formatCurrency } = window.ProcurementUtils;
+        const app = window.ProcurementApp;
+
+        const categoryContainer = document.getElementById("category-summary");
+        const tableContainer = document.getElementById("orders-table");
+        const form = document.getElementById("order-form");
+        const requestSelect = document.getElementById("request-id");
+        const preview = document.getElementById("request-preview");
+
+        function renderBudgets() {
+          const categories = app.listCategories();
+          renderCategorySummary(categoryContainer, categories);
+        }
+
+        function formatRequestOption(request) {
+          return `${request.id} · ${request.requester} · ${formatCurrency(request.total)}`;
+        }
+
+        function renderRequestOptions() {
+          const requests = app.listRequests();
+          const approved = requests.filter((request) => request.status === "Approved");
+          populateSelect(
+            requestSelect,
+            approved.map((request) => ({ label: formatRequestOption(request), value: request.id })),
+            approved.length ? "Choose an approved request" : "No approved requests available"
+          );
+          if (!approved.length) {
+            requestSelect.disabled = true;
+          } else {
+            requestSelect.disabled = false;
+          }
+          updatePreview();
+        }
+
+        function renderOrders() {
+          const orders = app.listOrders();
+          renderTable(tableContainer, [
+            { key: "id", label: "Order" },
+            { key: "vendor", label: "Vendor" },
+            {
+              key: "totalAmount",
+              label: "Total",
+              render: (value) => formatCurrency(value || 0),
+            },
+            {
+              key: "status",
+              label: "Status",
+              render: (value) => value,
+            },
+            {
+              type: "actions",
+              label: "Actions",
+              actions: (row) => {
+                const actions = [
+                  {
+                    label: "View",
+                    variant: "secondary",
+                    onAction: () => showOrderDetails(row),
+                  },
+                ];
+                if (row.status === "Open") {
+                  actions.push({
+                    label: "Close",
+                    variant: "success",
+                    onAction: () => handleAction(() => app.closePurchaseOrder(row.id), "Order closed"),
+                  });
+                }
+                return actions;
+              },
+            },
+          ], orders);
+        }
+
+        function showOrderDetails(order) {
+          const lines = order.lines
+            .map(
+              (line) =>
+                `<tr><td>${line.productName}</td><td>${line.qty}</td><td>${formatCurrency(line.price)}</td><td>${formatCurrency(
+                  line.qty * line.price
+                )}</td></tr>`
+            )
+            .join("");
+          const body = `
+            <p><strong>Request:</strong> ${order.requestId}</p>
+            <p><strong>Vendor:</strong> ${order.vendor}</p>
+            <p><strong>Status:</strong> ${order.status}</p>
+            <p><strong>Total:</strong> ${formatCurrency(order.totalAmount)}</p>
+            <table class="data-table">
+              <thead><tr><th>Product</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead>
+              <tbody>${lines}</tbody>
+            </table>
+          `;
+          showModal({ title: `Order ${order.id}`, content: body });
+        }
+
+        function handleAction(action, message) {
+          try {
+            action();
+            showToast(message, "success");
+            rerender();
+          } catch (error) {
+            console.error(error);
+            showToast(error.message, "danger");
+          }
+        }
+
+        function updatePreview() {
+          const requestId = requestSelect.value;
+          if (!requestId) {
+            preview.innerHTML = "<p>Select an approved request to preview its line items.</p>";
+            return;
+          }
+          const request = app.listRequests().find((item) => item.id === requestId);
+          if (!request) {
+            preview.innerHTML = "<p>No matching request.</p>";
+            return;
+          }
+          const rows = request.lines
+            .map(
+              (line) =>
+                `<tr><td>${line.productName}</td><td>${line.qty}</td><td>${formatCurrency(line.price)}</td><td>${formatCurrency(line.total)}</td></tr>`
+            )
+            .join("");
+          preview.innerHTML = `
+            <h3>${request.id} — ${request.requester}</h3>
+            <p>Status: ${request.status}</p>
+            <p>Total: <strong>${formatCurrency(request.total)}</strong></p>
+            <table class="data-table">
+              <thead><tr><th>Product</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          `;
+        }
+
+        requestSelect.addEventListener("change", updatePreview);
+
+        form.addEventListener("submit", (event) => {
+          event.preventDefault();
+          if (!requestSelect.value) {
+            showToast("Select an approved request first", "danger");
+            return;
+          }
+          const payload = {
+            requestId: requestSelect.value,
+            vendor: form.vendor.value.trim(),
+            notes: form.notes.value.trim(),
+          };
+          try {
+            app.createPurchaseOrder(payload);
+            showToast("Order created", "success");
+            form.reset();
+            renderRequestOptions();
+            rerender();
+          } catch (error) {
+            console.error(error);
+            showToast(error.message, "danger");
+          }
+        });
+
+        document.getElementById("reset-data").addEventListener("click", () => {
+          app.resetDemoData();
+          form.reset();
+          renderRequestOptions();
+          rerender();
+          showToast("Demo data reset", "success");
+        });
+
+        function rerender() {
+          renderBudgets();
+          renderOrders();
+        }
+
+        renderRequestOptions();
+        rerender();
+      });
+    </script>
+  </body>
+</html>

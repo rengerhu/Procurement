@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>About · Procurement Demo</title>
+    <base href="/Procurement/" />
+    <link rel="stylesheet" href="assets/styles.css" />
+    <script src="assets/utils.js" defer></script>
+    <script src="assets/ui.js" defer></script>
+    <script src="assets/app.js" defer></script>
+  </head>
+  <body>
+    <header>
+      <nav class="navbar" aria-label="Primary navigation">
+        <a class="navbar-brand" href="index.html">Procurement</a>
+        <div class="navbar-links">
+          <a href="index.html">Overview</a>
+          <a href="requests.html">Requests</a>
+          <a href="orders.html">Orders</a>
+          <a href="payments.html">Payments</a>
+          <a href="about.html" aria-current="page">About</a>
+        </div>
+      </nav>
+    </header>
+    <main>
+      <section class="section">
+        <div class="section-header">
+          <h1>About this project</h1>
+          <p>
+            This static front-end showcases a procurement management experience using browser-based
+            storage. It complements a Python domain model with a UI that demonstrates workflow states
+            and budget control in action.
+          </p>
+        </div>
+        <button class="btn btn-secondary" id="reset-data">Reset demo data</button>
+      </section>
+
+      <section class="section">
+        <h2>How it works</h2>
+        <div class="card-grid">
+          <article class="card">
+            <h3>Seeded master data</h3>
+            <p>Three product categories, five products, and example purchase requests get you started immediately.</p>
+          </article>
+          <article class="card">
+            <h3>Local-first storage</h3>
+            <p>All CRUD activity persists to <code>localStorage</code>, so refreshing keeps your scenario intact.</p>
+          </article>
+          <article class="card">
+            <h3>Workflow transitions</h3>
+            <p>Buttons on each list enforce valid transitions for requests, orders, and payments.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Contact</h2>
+        <div class="card">
+          <p>
+            Built by the Yeeflow solutions team. Learn more about our work and connect with us:
+          </p>
+          <ul>
+            <li><a href="https://www.yeeflow.com" target="_blank" rel="noreferrer">Yeeflow</a></li>
+            <li><a href="https://www.linkedin.com/company/yeeflow/" target="_blank" rel="noreferrer">LinkedIn</a></li>
+            <li><a href="mailto:hello@yeeflow.com">hello@yeeflow.com</a></li>
+          </ul>
+        </div>
+      </section>
+    </main>
+    <footer>
+      <p>Procurement workflow demo — built for GitHub Pages deployment.</p>
+    </footer>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        const { showToast } = window.UIHelpers;
+        document.getElementById("reset-data").addEventListener("click", () => {
+          window.ProcurementApp.resetDemoData();
+          showToast("Demo data reset", "success");
+        });
+      });
+    </script>
+  </body>
+</html>
